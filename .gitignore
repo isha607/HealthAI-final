@@ -1,3 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+.env.*
+
+# Database and local runtime data (DO NOT commit real patient data)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Backups
+backup_phase1/
+
+# Uploaded patient documents / runtime uploads
+uploads/
+backend/uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Large generated files (PDF guides, presentations, temp images)
+*.pdf
+*.pptx
+*.png
+cloudflared.exe
+
+# Test / temp databases
+test_*.db
+health_ai_backup_*.db
+health_ai_before_*.db
+
+# NOTE: ml_models/ is intentionally NOT ignored — model files are needed for deployment
 
 .env
 venv/
