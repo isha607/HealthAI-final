@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -71,7 +72,7 @@ app.include_router(chatbot.router)
 app.include_router(timeline.router)
 
 # Mount Static and Upload Folders
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+STATIC_DIR = Path(__file__).parent / "static"
 _RENDER_PERSIST = "/opt/render/project/src/data_persist"
 if os.path.isdir(_RENDER_PERSIST):
     UPLOADS_DIR = os.path.join(_RENDER_PERSIST, "uploads")
@@ -85,10 +86,24 @@ os.makedirs(os.path.join(UPLOADS_DIR, "prescriptions"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(
+        STATIC_DIR / "sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"}
+    )
+
+@app.get("/manifest.json", include_in_schema=False)
+def manifest():
+    return FileResponse(
+        STATIC_DIR / "manifest.json",
+        media_type="application/manifest+json"
+    )
+
 @app.get("/")
 def serve_index():
-    index_path = os.path.join(STATIC_DIR, "index.html")
-    return FileResponse(index_path)
+    return FileResponse(STATIC_DIR / "index.html")
 
 @app.on_event("startup")
 def startup_event():

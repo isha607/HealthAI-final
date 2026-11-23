@@ -128,6 +128,18 @@ def test_homepage_serves(client):
     assert "HealthAI" in r.text
 
 
+def test_pwa_assets_served(client):
+    worker = client.get("/sw.js")
+    assert worker.status_code == 200
+    assert worker.headers["content-type"].startswith("application/javascript")
+    assert worker.headers["service-worker-allowed"] == "/"
+
+    manifest = client.get("/manifest.json")
+    assert manifest.status_code == 200
+    assert manifest.headers["content-type"].startswith("application/manifest+json")
+    assert manifest.json()["name"] == "HealthAI"
+
+
 def test_get_patient_profile(client):
     r = client.get("/api/patient/profile/PAT-1001")
     assert r.status_code == 200, r.text

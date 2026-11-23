@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HealthAI – Integrated Patient Healthcare & AI Risk Platform</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563EB">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -90,7 +94,7 @@
     <!-- Auth Tabs -->
     <div class="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
       <button id="auth-tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white dark:bg-slate-700 shadow-sm text-primary transition">Sign In</button>
-      <button id="auth-tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 dark:text-slate-400 transition">Register Patient</button>
+      <button id="auth-tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-500 dark:text-slate-400 transition">Register</button>
     </div>
 
     <!-- Quick Demo Buttons -->
@@ -167,7 +171,7 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1">Role</label>
-          <select id="reg-role">
+          <select id="reg-role" onchange="toggleRoleFields()">
             <option value="patient" selected>Patient</option>
             <option value="doctor">Doctor</option>
           </select>
@@ -205,7 +209,7 @@
       </div>
 
       <!-- Portal Switcher (For Doctor or Demo) -->
-      <div class="flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1 gap-1">
+      <div id="portal-switcher" class="hidden flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1 gap-1">
         <button id="btn-patient-portal" onclick="switchPortal('patient')" class="portal-btn active px-3.5 py-1.5 rounded-lg text-xs font-semibold transition">
           <i data-lucide="user" class="inline w-3.5 h-3.5 mr-1"></i>Patient Portal
         </button>
@@ -226,7 +230,7 @@
           <span class="hidden sm:inline">Share with doctor</span>
         </button>
 
-        <button onclick="onBellClick()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500" title="Reminders & notifications">
+        <button id="bell-btn" onclick="onBellClick()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500" title="Reminders & notifications">
           <i data-lucide="bell" class="w-4 h-4"></i>
           <span id="bell-count" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">0</span>
         </button>
@@ -814,7 +818,7 @@
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <h2 class="text-xl font-bold text-slate-900 dark:text-white">Patient Roster & Directory</h2>
-          <p class="text-xs text-slate-500">Search and view longitudinal records, lab flags, and AI summaries for all patients.</p>
+          <p class="text-xs text-slate-500">Search and view longitudinal records, lab flags, and AI summaries for your patients.</p>
         </div>
         <div class="relative w-full sm:w-72">
           <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
@@ -1578,6 +1582,8 @@ function showMainApp() {
   if (roleBadge) {
     roleBadge.textContent = STATE.role === 'doctor' ? 'Doctor' : 'Patient';
   }
+  const bellBtn = document.getElementById('bell-btn');
+  if (bellBtn) bellBtn.classList.toggle('hidden', STATE.role === 'doctor');
   const shareBtn = document.getElementById('share-doctor-btn');
   if (shareBtn) shareBtn.classList.toggle('hidden', STATE.role === 'doctor');
   if (STATE.role === 'doctor') {
@@ -1693,6 +1699,19 @@ async function grantDoctorAccess() {
     });
     toast(r.message, 'success');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW failed', err));
+  });
+}
+
+function toggleRoleFields() {
+  const isDoctor = document.getElementById('reg-role').value === 'doctor';
+  ['reg-age', 'reg-gender', 'reg-blood'].forEach(id => {
+    document.getElementById(id).parentElement.classList.toggle('hidden', isDoctor);
+  });
 }
 
 function doLogout() {
