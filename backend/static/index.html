@@ -226,6 +226,11 @@
           <span class="hidden sm:inline">Share with doctor</span>
         </button>
 
+        <button onclick="onBellClick()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500" title="Reminders & notifications">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span id="bell-count" class="hidden absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">0</span>
+        </button>
+
         <button onclick="toggleDark()" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500" title="Toggle Theme">
           <i data-lucide="moon" class="w-4 h-4" id="dark-icon"></i>
         </button>
@@ -1584,6 +1589,7 @@ function showMainApp() {
   } else {
     switchPortal('patient');
     loadDashboard();
+    startReminderNotifications();
   }
   lucide.createIcons();
 }
@@ -1698,6 +1704,7 @@ function doLogout() {
   localStorage.removeItem('healthai_role');
   localStorage.removeItem('healthai_name');
   localStorage.removeItem('healthai_patient_id');
+  stopReminderNotifications();
   toast('Signed out successfully', 'info');
   showAuthScreen();
 }
@@ -1898,7 +1905,7 @@ async function loadDashboard() {
   el.innerHTML = '<div class="flex justify-center py-12"><div class="spinner"></div></div>';
 
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const [profile, prescriptions, reminders, reports, assessments, visits] = await Promise.all([
       apiFetch('/api/patient/profile/' + STATE.patientId),
       apiFetch('/api/documents/patient/' + STATE.patientId + '/prescriptions').catch(() => []),
@@ -4196,6 +4203,7 @@ async function toggleReminder(id, newStatus) {
       body: JSON.stringify({ taken_status: newStatus })
     });
     toast(newStatus ? '✅ Marked as done!' : 'Reset to pending', 'info');
+    checkDueReminders();
     if (STATE.currentPatientTab === 'dashboard') {
       loadDashboard();
     } else {
@@ -4204,6 +4212,72 @@ async function toggleReminder(id, newStatus) {
   } catch (e) {
     toast('Error updating status: ' + e.message, 'error');
   }
+}
+
+// =====================================================================
+// NOTIFICATIONS (in-app toast + browser pop-up)
+// =====================================================================
+let reminderTimer = null;
+const notifiedIds = new Set();
+
+function localToday() { return new Date().toLocaleDateString('en-CA'); } // YYYY-MM-DD, local time
+
+function startReminderNotifications() {
+  if (STATE.role !== 'patient' || !STATE.patientId) return;
+  stopReminderNotifications();
+  checkDueReminders();
+  reminderTimer = setInterval(checkDueReminders, 60000);
+}
+
+function stopReminderNotifications() {
+  if (reminderTimer) clearInterval(reminderTimer);
+  reminderTimer = null;
+  notifiedIds.clear();
+  setBellCount(0);
+}
+
+function setBellCount(n) {
+  const el = document.getElementById('bell-count');
+  if (!el) return;
+  el.textContent = n;
+  el.classList.toggle('hidden', n === 0);
+}
+
+function showBrowserNotification(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: '/static/icons/icon-192.png' };
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts));
+  } else {
+    new Notification(title, opts);
+  }
+}
+
+async function checkDueReminders() {
+  try {
+    const list = await apiFetch(`/api/reminders/${STATE.patientId}?date_filter=${localToday()}`);
+    const due = list.filter(r => !r.taken_status && r.is_overdue);
+    setBellCount(due.length);
+
+    const fresh = due.filter(r => !notifiedIds.has(r.id));
+    if (!fresh.length) return;
+    fresh.forEach(r => notifiedIds.add(r.id));
+
+    const text = fresh.length === 1
+      ? `${fresh[0].medicine_name} ${fresh[0].dosage} (${fresh[0].scheduled_time})`
+      : `${fresh.length} medicines are pending`;
+    toast('💊 Reminder: ' + text, 'warn');
+    showBrowserNotification('HealthAI Medicine Reminder', text);
+  } catch (e) { /* ignore network errors */ }
+}
+
+async function onBellClick() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    const p = await Notification.requestPermission();
+    toast(p === 'granted' ? 'Browser notifications enabled' : 'Browser notifications blocked',
+          p === 'granted' ? 'success' : 'warn');
+  }
+  switchPatientTab('reminders');
 }
 
 async function deleteReminder(id) {
