@@ -164,3 +164,48 @@ def test_chatbot_query(client):
     reply = d["response"].lower()
     assert any(kw in reply for kw in ["glucose", "abnormal", "high", "cholesterol", "john"]), \
         f"Unexpected reply: {d['response']}"
+
+
+def test_patient_grants_doctor_access(client):
+    doctor_response = client.post("/api/auth/register", json={
+        "email": "newdoctor@hospital.org",
+        "password": "doctor123",
+        "role": "doctor",
+        "full_name": "Dr. New Doctor",
+    })
+    assert doctor_response.status_code == 200, doctor_response.text
+    doctor_data = doctor_response.json()
+    doctor_headers = {"Authorization": f"Bearer {doctor_data['access_token']}"}
+
+    assert client.get("/api/doctor/patients", headers=doctor_headers).json() == []
+    assert client.post(
+        "/api/doctor/patient/PAT-1001/assign", headers=doctor_headers
+    ).status_code == 403
+
+    patient_response = client.post("/api/auth/login", json={
+        "email": "patient@health.org",
+        "password": "patient123",
+    })
+    assert patient_response.status_code == 200, patient_response.text
+    patient_headers = {"Authorization": f"Bearer {patient_response.json()['access_token']}"}
+
+    grant_payload = {"doctor_code": doctor_data["identifier"].lower()}
+    grant_response = client.post(
+        "/api/auth/grant-doctor-access", json=grant_payload, headers=patient_headers
+    )
+    assert grant_response.status_code == 200, grant_response.text
+    assert grant_response.json()["message"] == f"Access granted to Dr. {doctor_data['full_name']}"
+
+    duplicate_response = client.post(
+        "/api/auth/grant-doctor-access", json=grant_payload, headers=patient_headers
+    )
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    my_doctors = client.get("/api/auth/my-doctors", headers=patient_headers).json()
+    assert {
+        "doctor_code": doctor_data["identifier"],
+        "full_name": "Dr. New Doctor",
+    } in my_doctors
+    assert sum(d["doctor_code"] == doctor_data["identifier"] for d in my_doctors) == 1
+    assert [p["patient_id"] for p in client.get(
+        "/api/doctor/patients", headers=doctor_headers
+    ).json()] == ["PAT-1001"]

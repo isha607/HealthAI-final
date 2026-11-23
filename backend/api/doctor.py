@@ -113,7 +113,7 @@ def verify_doctor_patient_access(
     # Check if doctor has recorded prior visits for this patient
     has_visit = db.query(DoctorVisit).filter(
         DoctorVisit.patient_id == patient_id,
-        (DoctorVisit.doctor_id == doctor.id) | (DoctorVisit.doctor_name == doctor.full_name)
+        DoctorVisit.doctor_id == doctor.id
     ).first()
     if has_visit:
         return patient
@@ -142,14 +142,13 @@ def list_patients(
         
         # Also include any patients this doctor has visited
         visit_patient_records = db.query(DoctorVisit.patient_id).filter(
-            (DoctorVisit.doctor_id == doctor.id) | (DoctorVisit.doctor_name == doctor.full_name)
+            DoctorVisit.doctor_id == doctor.id
         ).all()
         for vp in visit_patient_records:
             if vp[0] not in assigned_ids:
                 assigned_ids.append(vp[0])
 
-        if assigned_ids:
-            query = query.filter(PatientProfile.patient_id.in_(assigned_ids))
+        query = query.filter(PatientProfile.patient_id.in_(assigned_ids))
 
     if search:
         query = query.filter(
@@ -422,6 +421,8 @@ def assign_patient_to_doctor(
     db: Session = Depends(get_db)
 ):
     """Assigns patient to the authenticated doctor's clinical panel."""
+    raise HTTPException(status_code=403,
+        detail="Only the patient can grant access. Ask the patient to add your Doctor Code in their app.")
     patient = db.query(PatientProfile).filter(PatientProfile.patient_id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient profile not found")

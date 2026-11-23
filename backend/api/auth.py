@@ -7,7 +7,7 @@ import jwt
 import bcrypt
 
 from backend.database import get_db
-from backend.models.db_models import User, PatientProfile, DoctorProfile
+from backend.models.db_models import User, PatientProfile, DoctorProfile, DoctorPatientRelationship
 from backend.models.schemas import UserRegister, UserLogin, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -134,3 +134,44 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
         identifier=identifier,
         full_name=full_name
     )
+
+
+class DoctorAccessRequest(BaseModel):
+    doctor_code: str
+
+
+def _require_patient(authorization: Optional[str]) -> str:
+    payload = get_current_user_payload(authorization)
+    if not payload or payload.get("role") != "patient" or not payload.get("identifier"):
+        raise HTTPException(status_code=401, detail="Patient login required")
+    return payload["identifier"]
+
+
+@router.post("/grant-doctor-access")
+def grant_doctor_access(req: DoctorAccessRequest, authorization: Optional[str] = Header(None),
+                        db: Session = Depends(get_db)):
+    patient_id = _require_patient(authorization)
+    doc = db.query(DoctorProfile).filter(
+        DoctorProfile.doctor_code == req.doctor_code.strip().upper()).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="No doctor found with that code")
+    exists = db.query(DoctorPatientRelationship).filter(
+        DoctorPatientRelationship.doctor_id == doc.id,
+        DoctorPatientRelationship.patient_id == patient_id).first()
+    if not exists:
+        db.add(DoctorPatientRelationship(doctor_id=doc.id, patient_id=patient_id))
+        db.commit()
+    return {"message": f"Access granted to Dr. {doc.full_name}"}
+
+
+@router.get("/my-doctors")
+def my_doctors(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    patient_id = _require_patient(authorization)
+    rels = db.query(DoctorPatientRelationship).filter(
+        DoctorPatientRelationship.patient_id == patient_id).all()
+    out = []
+    for r in rels:
+        d = db.query(DoctorProfile).filter(DoctorProfile.id == r.doctor_id).first()
+        if d:
+            out.append({"doctor_code": d.doctor_code, "full_name": d.full_name})
+    return out
