@@ -177,8 +177,6 @@ async def preview_medical_report(
     extracted_params = parse_laboratory_parameters(extracted_text)
     have = {p["test_name"] for p in extracted_params}
     extracted_params += [p for p in parse_table_style(extracted_text) if p["test_name"] not in have]
-    print("TEXT RECEIVED:", repr(extracted_text[:300]))
-    print("PARAMS FOUND:", len(extracted_params))
 
     # 5. Duplicate Detection
     is_duplicate = False
