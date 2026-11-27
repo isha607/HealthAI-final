@@ -2557,8 +2557,9 @@ async function extractVitalsDirect() {
     }
     const data = await res.json();
     STATE.previewReportData = data;
-    populateReportPreviewModal(data);
-    openModal('report-preview-modal');
+    renderPreviewModal(data);
+    document.getElementById('report-preview-modal').classList.remove('hidden');
+    lucide.createIcons();
   } catch (e) {
     toast('Error extracting vitals: ' + e.message, 'error');
   } finally {
@@ -2874,7 +2875,7 @@ async function previewAndVerifyReport() {
 }
 
 function renderPreviewModal(data) {
-  document.getElementById('preview-report-date').value = data.report_date || new Date().toISOString().split('T')[0];
+  document.getElementById('preview-report-date').value = data.report_date || new Date().toLocaleDateString('en-CA');
   document.getElementById('preview-lab-name').value = data.lab_name || '';
   document.getElementById('preview-report-title').value = data.report_title || 'Diagnostic Lab Report';
 
