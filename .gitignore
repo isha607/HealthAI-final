@@ -52,3 +52,5 @@ health_ai_before_*.db
 venv/
 .venv/
 __pycache__/
+
+!backend/static/icons/*.png

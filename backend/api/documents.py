@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional, List
 import os
 import shutil
+import re
 from datetime import datetime
 
 from backend.database import get_db
@@ -76,6 +77,50 @@ def resolve_file_info(file_path: Optional[str], default_subdir: str = "reports")
     return True, url, fname
 
 
+THYROID_TESTS = [
+    ("TRIIODOTHYRONINE", "Total T3 (Triiodothyronine)"),
+    ("THYROXINE", "Total T4 (Thyroxine)"),
+    ("THYROID STIMULATING HORMONE", "TSH"),
+]
+
+def parse_table_style(text):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    out = []
+    for i, line in enumerate(lines):
+        up = line.upper()
+        for key, name in THYROID_TESTS:
+            if key not in up:
+                continue
+            val = unit = lo = hi = None
+            for j in range(i + 1, min(i + 8, len(lines))):
+                l = lines[j]
+                if any(k in l.upper() for k, _ in THYROID_TESTS):
+                    break
+                m = re.search(r"(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)", l)
+                if val is None and re.fullmatch(r"[<>]?\s*\d+(?:\.\d+)?", l):
+                    val = float(re.sub(r"[<>\s]", "", l))
+                elif val is not None and m:
+                    lo, hi = float(m.group(1)), float(m.group(2))
+                    break
+                elif val is not None and unit is None and len(l) < 15:
+                    unit = l
+            if val is not None:
+                status = "NORMAL"
+                if lo is not None and val < lo:
+                    status = "LOW"
+                elif hi is not None and val > hi:
+                    status = "HIGH"
+                out.append({
+                    "test_name": name, "result_value": val, "unit": unit or "",
+                    "reference_low": lo, "reference_high": hi,
+                    "reference_interval": f"{lo} - {hi}" if lo is not None else "",
+                    "status": status,
+                    "clinical_explanation": f"Observed {name} is {val} {unit or ''}",
+                })
+            break
+    return out
+
+
 @router.post("/preview-report")
 async def preview_medical_report(
     patient_id: str = Form(...),
@@ -130,6 +175,10 @@ async def preview_medical_report(
 
     # 4. Structured Parameter Extraction
     extracted_params = parse_laboratory_parameters(extracted_text)
+    have = {p["test_name"] for p in extracted_params}
+    extracted_params += [p for p in parse_table_style(extracted_text) if p["test_name"] not in have]
+    print("TEXT RECEIVED:", repr(extracted_text[:300]))
+    print("PARAMS FOUND:", len(extracted_params))
 
     # 5. Duplicate Detection
     is_duplicate = False

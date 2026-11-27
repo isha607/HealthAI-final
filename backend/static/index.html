@@ -1548,6 +1548,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+document.addEventListener('click', () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+
 // Switch between Login and Register tabs on Auth screen
 function switchAuthTab(tab) {
   const isLogin = tab === 'login';
@@ -4272,10 +4278,29 @@ function showBrowserNotification(title, body) {
   }
 }
 
+function minutesOf(t) {
+  const m = /(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(t || '');
+  if (!m) return null;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const ap = (m[3] || '').toUpperCase();
+  if (ap === 'PM' && h < 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
 async function checkDueReminders() {
   try {
     const list = await apiFetch(`/api/reminders/${STATE.patientId}?date_filter=${localToday()}`);
-    const due = list.filter(r => !r.taken_status && r.is_overdue);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const today = localToday();
+
+    const due = list.filter(r => {
+      if (r.taken_status) return false;
+      if (r.schedule_date && r.schedule_date !== today) return false;
+      const t = minutesOf(r.scheduled_time);
+      return t !== null && nowMin >= t;
+    });
     setBellCount(due.length);
 
     const fresh = due.filter(r => !notifiedIds.has(r.id));
@@ -4285,16 +4310,20 @@ async function checkDueReminders() {
     const text = fresh.length === 1
       ? `${fresh[0].medicine_name} ${fresh[0].dosage} (${fresh[0].scheduled_time})`
       : `${fresh.length} medicines are pending`;
-    toast('💊 Reminder: ' + text, 'warn');
+        toast('💊 Reminder: ' + text, 'warn');
     showBrowserNotification('HealthAI Medicine Reminder', text);
-  } catch (e) { /* ignore network errors */ }
+
+    fetch('https://ntfy.sh/healthai-isha-7391', {
+      method: 'POST',
+      body: 'A medicine dose is due. Open HealthAI.',
+      headers: { Title: 'HealthAI Reminder' }
+    }).catch(() => {});
+  } catch (e) { console.warn(e); }
 }
 
-async function onBellClick() {
+function onBellClick() {
   if ('Notification' in window && Notification.permission === 'default') {
-    const p = await Notification.requestPermission();
-    toast(p === 'granted' ? 'Browser notifications enabled' : 'Browser notifications blocked',
-          p === 'granted' ? 'success' : 'warn');
+    Notification.requestPermission();
   }
   switchPatientTab('reminders');
 }
